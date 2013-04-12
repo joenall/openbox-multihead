@@ -193,6 +193,8 @@ RrTheme* RrThemeNew(const RrInstance *inst, const gchar *name,
     theme->a_unfocused_title = RrAppearanceNew(inst, 0);
     theme->a_focused_label = RrAppearanceNew(inst, 1);
     theme->a_unfocused_label = RrAppearanceNew(inst, 1);
+    theme->a_focused_context_label = RrAppearanceNew(inst, 1);
+    theme->a_unfocused_context_label = RrAppearanceNew(inst, 1);
     theme->a_icon = RrAppearanceNew(inst, 1);
     theme->a_focused_handle = RrAppearanceNew(inst, 0);
     theme->a_unfocused_handle = RrAppearanceNew(inst, 0);
@@ -580,6 +582,9 @@ RrTheme* RrThemeNew(const RrInstance *inst, const gchar *name,
     READ_APPEARANCE("menu.title.bg", theme->a_menu_title, TRUE);
     READ_APPEARANCE("menu.items.active.bg", theme->a_menu_selected, TRUE);
 
+    set_default_appearance(theme->a_focused_context_label);
+    set_default_appearance(theme->a_unfocused_context_label);
+
     theme->a_menu_disabled_selected =
         RrAppearanceCopy(theme->a_menu_selected);
 
@@ -918,6 +923,12 @@ RrTheme* RrThemeNew(const RrInstance *inst, const gchar *name,
         theme->a_menu_bullet_selected->surface.grad = RR_SURFACE_PARENTREL;
 
     /* set up the textures */
+    theme->a_focused_context_label->texture[0].type = RR_TEXTURE_TEXT;
+    theme->a_focused_context_label->texture[0].data.text.justify = winjust;
+    theme->a_focused_context_label->texture[0].data.text.font=theme->win_font_focused;
+    theme->a_focused_context_label->texture[0].data.text.color =
+        RrColorParse(inst, "black")/*theme->title_focused_color*/;
+
     theme->a_focused_label->texture[0].type = RR_TEXTURE_TEXT;
     theme->a_focused_label->texture[0].data.text.justify = winjust;
     theme->a_focused_label->texture[0].data.text.font=theme->win_font_focused;
@@ -935,6 +946,8 @@ RrTheme* RrThemeNew(const RrInstance *inst, const gchar *name,
                 i = 1;
             theme->a_focused_label->texture[0].data.text.shadow_offset_x = i;
             theme->a_focused_label->texture[0].data.text.shadow_offset_y = i;
+            theme->a_focused_context_label->texture[0].data.text.shadow_offset_x = i;
+            theme->a_focused_context_label->texture[0].data.text.shadow_offset_y = i;
         }
         if ((p = strstr(str, "shadowtint=")))
         {
@@ -953,6 +966,11 @@ RrTheme* RrThemeNew(const RrInstance *inst, const gchar *name,
     theme->a_focused_label->texture[0].data.text.shadow_color =
         theme->title_focused_shadow_color;
     theme->a_focused_label->texture[0].data.text.shadow_alpha =
+        theme->title_focused_shadow_alpha;
+
+    theme->a_focused_context_label->texture[0].data.text.shadow_color =
+        theme->title_focused_shadow_color;
+    theme->a_focused_context_label->texture[0].data.text.shadow_alpha =
         theme->title_focused_shadow_alpha;
 
     theme->osd_hilite_label->texture[0].type = RR_TEXTURE_TEXT;
@@ -1060,6 +1078,8 @@ RrTheme* RrThemeNew(const RrInstance *inst, const gchar *name,
                 i = 1;
             theme->a_unfocused_label->texture[0].data.text.shadow_offset_x = i;
             theme->a_unfocused_label->texture[0].data.text.shadow_offset_y = i;
+            theme->a_unfocused_context_label->texture[0].data.text.shadow_offset_x = i;
+            theme->a_unfocused_context_label->texture[0].data.text.shadow_offset_y = i;
         }
         if ((p = strstr(str, "shadowtint=")))
         {
@@ -1079,6 +1099,10 @@ RrTheme* RrThemeNew(const RrInstance *inst, const gchar *name,
         theme->title_unfocused_shadow_color;
     theme->a_unfocused_label->texture[0].data.text.shadow_alpha =
         theme->title_unfocused_shadow_alpha;
+    theme->a_unfocused_context_label->texture[0].data.text.shadow_color =
+        theme->title_unfocused_shadow_color;
+    theme->a_unfocused_context_label->texture[0].data.text.shadow_alpha =
+        theme->title_unfocused_shadow_alpha;
 
     theme->osd_unhilite_label->texture[0].type = RR_TEXTURE_TEXT;
     theme->osd_unhilite_label->texture[0].data.text.justify = RR_JUSTIFY_LEFT;
@@ -1086,6 +1110,13 @@ RrTheme* RrThemeNew(const RrInstance *inst, const gchar *name,
         theme->osd_font_unhilite;
     theme->osd_unhilite_label->texture[0].data.text.color =
         theme->osd_text_inactive_color;
+
+    theme->a_unfocused_context_label->texture[0].type = RR_TEXTURE_TEXT;
+    theme->a_unfocused_context_label->texture[0].data.text.justify = winjust;
+    theme->a_unfocused_context_label->texture[0].data.text.font =
+        theme->win_font_unfocused;
+    theme->a_unfocused_context_label->texture[0].data.text.color =
+        theme->title_unfocused_color;
 
     if (read_string(db, "osd.inactive.label.text.font", &str))
     {
@@ -1570,7 +1601,7 @@ RrTheme* RrThemeNew(const RrInstance *inst, const gchar *name,
            MAX(MAX(theme->padding * 2, ft + fb),
            MAX(theme->padding * 2, ut + ub));
         */
-        theme->title_height = theme->label_height + theme->paddingy * 2;
+        theme->title_height = (theme->label_height * 2) + (theme->paddingy * 4);
 
         RrMargins(theme->a_menu_title, &ul, &ut, &ur, &ub);
         theme->menu_title_label_height = theme->menu_title_font_height+ut+ub;
@@ -1679,6 +1710,8 @@ void RrThemeFree(RrTheme *theme)
         RrAppearanceFree(theme->a_unfocused_title);
         RrAppearanceFree(theme->a_focused_label);
         RrAppearanceFree(theme->a_unfocused_label);
+        RrAppearanceFree(theme->a_focused_context_label);
+        RrAppearanceFree(theme->a_unfocused_context_label);
         RrAppearanceFree(theme->a_icon);
         RrAppearanceFree(theme->a_focused_handle);
         RrAppearanceFree(theme->a_unfocused_handle);

@@ -180,6 +180,10 @@ openbox_openbox_LDADD = \
 	$(SM_LIBS) \
 	$(GLIB_LIBS) \
 	$(X_LIBS) \
+	$(XCB_LIBS) \
+	$(X11_XCB_LIBS) \
+	-lX11-xcb -lxcb -lxcb-xselinux \
+	-lselinux -lpthread \
 	$(XCURSOR_LIBS) \
 	$(LIBSN_LIBS) \
 	$(XML_LIBS) \
@@ -505,7 +509,7 @@ data/autostart/openbox-autostart: $(top_srcdir)/data/autostart/openbox-autostart
 
 %.1.in: %.1.sgml
 	@echo make: creating $@
-	@docbook-to-man $< >$@
+	@docbook2man $< >$@
 
 %.1: %.1.in Makefile
 	@echo make: creating $@

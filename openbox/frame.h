@@ -95,6 +95,7 @@ struct _ObFrame
 
     Window    title;
     Window    label;
+    Window    context_label;
     Window    max;
     Window    close;
     Window    desk;

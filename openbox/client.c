@@ -260,6 +260,8 @@ void client_manage(Window window, ObPrompt *prompt)
 
     /* create the decoration frame for the client window */
     self->frame = frame_new(self);
+    if (self->frame == NULL)
+        return ;
 
     frame_grab_client(self->frame);
 

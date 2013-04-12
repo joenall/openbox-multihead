@@ -180,6 +180,8 @@ struct _RrTheme {
     RrAppearance *osd_pressed_button;
     RrAppearance *osd_unpressed_button;
     RrAppearance *osd_focused_button;
+    RrAppearance *a_focused_context_label;
+    RrAppearance *a_unfocused_context_label;
 
     gchar *name;
 };

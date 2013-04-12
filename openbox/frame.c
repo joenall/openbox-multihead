@@ -32,6 +32,17 @@
 #include "obt/display.h"
 #include "obt/xqueue.h"
 #include "obt/prop.h"
+#include <X11/Xlib-xcb.h>
+#include <xcb/xselinux.h>
+#include <selinux/selinux.h>
+#include <selinux/context.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <assert.h>
+#include <stddef.h>
+#include <stdint.h>
+
 
 #define FRAME_EVENTMASK (EnterWindowMask | LeaveWindowMask | \
                          ButtonPressMask | ButtonReleaseMask | \
@@ -93,6 +104,22 @@ ObFrame *frame_new(ObClient *client)
     self = g_slice_new0(ObFrame);
     self->client = client;
 
+    if (is_selinux_enabled()) {
+        /* Get the window context */
+        xcb_generic_error_t *xcb_error;
+        xcb_connection_t *xcb_con = XGetXCBConnection(obt_display);
+        xcb_selinux_get_client_context_cookie_t client_cookie = xcb_selinux_get_client_context(xcb_con, self->client->window);
+        xcb_selinux_get_client_context_reply_t *client_reply = xcb_selinux_get_client_context_reply(xcb_con, client_cookie, &xcb_error);
+        if (client_reply != NULL) {
+            security_context_t context = NULL, tcon = NULL;
+            context = xcb_selinux_get_client_context_context(client_reply);
+            ob_debug("window context %s", context);
+            int rc = selinux_raw_to_trans_context(context, &tcon);
+            self->client->context_label = g_strdup(tcon);
+            freecon(tcon);
+	}
+    }
+
     visual = check_32bit_client(client);
 
     /* create the non-visible decor windows */
@@ -153,6 +180,7 @@ ObFrame *frame_new(ObClient *client)
     self->right = createWindow(self->window, NULL, mask, &attrib);
 
     self->label = createWindow(self->title, NULL, mask, &attrib);
+    self->context_label = createWindow(self->title, NULL, mask, &attrib);
     self->max = createWindow(self->title, NULL, mask, &attrib);
     self->close = createWindow(self->title, NULL, mask, &attrib);
     self->desk = createWindow(self->title, NULL, mask, &attrib);
@@ -180,6 +208,7 @@ ObFrame *frame_new(ObClient *client)
 
     /* the other stuff is shown based on decor settings */
     XMapWindow(obt_display, self->label);
+    XMapWindow(obt_display, self->context_label);
     XMapWindow(obt_display, self->backback);
     XMapWindow(obt_display, self->backfront);
 
@@ -876,6 +905,8 @@ void frame_adjust_area(ObFrame *self, gboolean moved,
     {
         XResizeWindow(obt_display, self->label, self->label_width,
                       ob_rr_theme->label_height);
+        XResizeWindow(obt_display, self->context_label, self->width,
+                      ob_rr_theme->label_height + ob_rr_theme->paddingy);
     }
 }
 
@@ -1018,6 +1049,7 @@ void frame_grab_client(ObFrame *self)
     window_add(&self->innerbrr, CLIENT_AS_WINDOW(self->client));
     window_add(&self->title, CLIENT_AS_WINDOW(self->client));
     window_add(&self->label, CLIENT_AS_WINDOW(self->client));
+    window_add(&self->context_label, CLIENT_AS_WINDOW(self->client));
     window_add(&self->max, CLIENT_AS_WINDOW(self->client));
     window_add(&self->close, CLIENT_AS_WINDOW(self->client));
     window_add(&self->desk, CLIENT_AS_WINDOW(self->client));
@@ -1090,6 +1122,7 @@ void frame_release_client(ObFrame *self)
     window_remove(self->innerbrr);
     window_remove(self->title);
     window_remove(self->label);
+    window_remove(self->context_label);
     window_remove(self->max);
     window_remove(self->close);
     window_remove(self->desk);
@@ -1285,7 +1318,7 @@ static void layout_title(ObFrame *self)
     if (self->label_on && self->label_width > 0) {
         XMapWindow(obt_display, self->label);
         XMoveWindow(obt_display, self->label, self->label_x,
-                    ob_rr_theme->paddingy);
+                    3*ob_rr_theme->paddingy + ob_rr_theme->label_height);
     } else
         XUnmapWindow(obt_display, self->label);
 }
@@ -1473,6 +1506,7 @@ ObFrameContext frame_context(ObClient *client, Window win, gint x, gint y)
 
     if (win == self->window)            return OB_FRAME_CONTEXT_FRAME;
     if (win == self->label)             return OB_FRAME_CONTEXT_TITLEBAR;
+    if (win == self->context_label)     return OB_FRAME_CONTEXT_TITLEBAR;
     if (win == self->handle)            return OB_FRAME_CONTEXT_BOTTOM;
     if (win == self->handletop)         return OB_FRAME_CONTEXT_BOTTOM;
     if (win == self->handlebottom)      return OB_FRAME_CONTEXT_BOTTOM;

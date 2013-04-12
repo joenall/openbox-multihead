@@ -25,8 +25,14 @@
 #include "framerender.h"
 #include "obrender/theme.h"
 #include "obt/prop.h"
+#include "obrender/instance.h"
+#include "obrender/color.h"
+#include "debug.h"
+#include <selinux/selinux.h>
+#include <selinux/context.h>
 
 static void framerender_label(ObFrame *self, RrAppearance *a);
+static void framerender_context_label(ObFrame *self, RrAppearance *a);
 static void framerender_icon(ObFrame *self, RrAppearance *a);
 static void framerender_max(ObFrame *self, RrAppearance *a);
 static void framerender_iconify(ObFrame *self, RrAppearance *a);
@@ -140,10 +146,11 @@ void framerender_frame(ObFrame *self)
     }
 
     if (self->decorations & OB_FRAME_DECOR_TITLEBAR) {
-        RrAppearance *t, *l, *m, *n, *i, *d, *s, *c, *clear;
+        RrAppearance *t, *l, *m, *n, *i, *d, *s, *c, *clear, *cl;
         if (self->focused) {
             t = ob_rr_theme->a_focused_title;
             l = ob_rr_theme->a_focused_label;
+            cl = ob_rr_theme->a_focused_context_label;
             m = (!(self->decorations & OB_FRAME_DECOR_MAXIMIZE) ?
                  ob_rr_theme->btn_max->a_disabled_focused :
                  (self->client->max_vert || self->client->max_horz ?
@@ -201,6 +208,7 @@ void framerender_frame(ObFrame *self)
         } else {
             t = ob_rr_theme->a_unfocused_title;
             l = ob_rr_theme->a_unfocused_label;
+            cl = ob_rr_theme->a_unfocused_context_label;
             m = (!(self->decorations & OB_FRAME_DECOR_MAXIMIZE) ?
                  ob_rr_theme->btn_max->a_disabled_unfocused :
                  (self->client->max_vert || self->client->max_horz ?
@@ -295,6 +303,10 @@ void framerender_frame(ObFrame *self)
         l->surface.parentx = self->label_x;
         l->surface.parenty = ob_rr_theme->paddingy;
 
+        cl->surface.parent = t;
+        cl->surface.parentx = self->label_x;
+        cl->surface.parenty = ob_rr_theme->paddingy;
+
         m->surface.parent = t;
         m->surface.parentx = self->max_x;
         m->surface.parenty = ob_rr_theme->paddingy + 1;
@@ -320,6 +332,7 @@ void framerender_frame(ObFrame *self)
         c->surface.parenty = ob_rr_theme->paddingy + 1;
 
         framerender_label(self, l);
+        framerender_context_label(self, cl);
         framerender_max(self, m);
         framerender_icon(self, n);
         framerender_iconify(self, i);
@@ -368,6 +381,35 @@ static void framerender_label(ObFrame *self, RrAppearance *a)
     /* set the texture's text! */
     a->texture[0].data.text.string = self->client->title;
     RrPaint(a, self->label, self->label_width, ob_rr_theme->label_height);
+}
+
+static void framerender_context_label(ObFrame *self, RrAppearance *a)
+{
+    if (!self->label_on) return;
+    /* set the texture's text! */
+
+    context_t con = context_new(self->client->context_label);
+    char *range = context_range_get(con);
+    a->texture[0].data.text.string = g_strdup(range);
+
+    security_context_t raw_context = NULL;
+    selinux_trans_to_raw_context(self->client->context_label,
+	                          &raw_context);
+    char *colors;
+    selinux_raw_context_to_color(raw_context,
+	                          &colors);
+    freecon(raw_context);
+    char *orig_colors = colors;
+    char *fg = strsep(&colors, " ");
+    char *bg = strsep(&colors, " ");
+    context_free(con);
+
+    RrColor *textcolor = RrColorParse(ob_rr_inst, fg);
+    a->texture[0].data.text.color = textcolor;
+    RrColor *rrcolor = RrColorParse(ob_rr_inst, bg);
+    a->surface.primary = rrcolor;
+    a->surface.secondary = rrcolor;
+    ob_debug("RrPaint: width - %d height - %d\n", self->width, ob_rr_theme->label_height); RrPaint(a, self->context_label, self->width, ob_rr_theme->label_height);
 }
 
 static void framerender_icon(ObFrame *self, RrAppearance *a)
